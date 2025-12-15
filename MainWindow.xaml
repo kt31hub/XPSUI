@@ -17,7 +17,7 @@
             <MenuItem Header="Setting">
                 <MenuItem Header="Shift Config" Click="OpenSettings_shift" />
                 <MenuItem Header="Add RSF data" Click="OpenSetting_RSF"/>
-                <MenuItem Header="Peak Fit Config"/>
+                <MenuItem Header="Peak Fit Config" Click="OpenSetting_peakfit"/>
             </MenuItem>
             <TextBox x:Name="DebagBox"/>
         </Menu>

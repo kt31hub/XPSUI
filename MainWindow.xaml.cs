@@ -96,6 +96,12 @@ namespace XPSUI
             RSF.ShowDialog();
         }
 
+        private void OpenSetting_peakfit(object sender, RoutedEventArgs e)
+        {
+            var PeakFitEditor = new PeakFitEditor();
+
+            PeakFitEditor.ShowDialog();
+        }
 
     }
 }
