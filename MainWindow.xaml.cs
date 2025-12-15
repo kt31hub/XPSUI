@@ -1,109 +1,187 @@
 ﻿using Microsoft.Win32;
 using ScottPlot;
-using System.Text;
-using System.Text.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace XPSUI
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
+        // ロジックを担当するエンジンを呼び出す
+        private XpsEngine _engine = new XpsEngine();
+
         public MainWindow()
         {
             InitializeComponent();
+
+            // Python初期化 (失敗してもここでは静かにする)
+            _engine.TryInitializePython(silent: true);
+
+            // 初期グラフ設定
             graph_Default_setting();
             graph_1.Refresh();
-            
-        }
-        //グローバル関数の定義
-        public string data_file_path=" ";
-
-        //デフォルトプロット
-        private void graph_Default_setting()
-        {
-            var x_label = graph_1.Plot.Axes.Bottom.Label;
-            var x_axe = graph_1.Plot.Axes.Bottom;
-            var y_label = graph_1.Plot.Axes.Left.Label;
-            var y_axe = graph_1.Plot.Axes.Left;
-
-            x_label.Text = "Binding Energy [eV]";
-            x_label.FontSize = 24;
-            x_label.FontName = "Times New Roman";
-            x_axe.TickLabelStyle.FontSize = 24;
-            x_axe.TickLabelStyle.FontName = "Times New Roman";
-
-            y_label.Text = "Intensity [-]";
-            y_label.FontSize = 24;
-            y_label.FontName = "Times New Roman";
-            y_axe.TickLabelStyle.FontSize = 24;
-            y_axe.TickLabelStyle.FontName = "Times New Roman";
-
-            //デバック用
-            double[] dataX = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-            double[] dataY = { 1, 4, 9, 16, 25, 16, 9, 4, 1 };
-            graph_1.Plot.Add.Scatter(dataX, dataY);
         }
 
-        
-        //ファイルパス獲得
-        private void Open_file(object sender, RoutedEventArgs e)
+        // ---------------------------------------------------------
+        // メニュー: Pythonパス設定
+        // ---------------------------------------------------------
+        private void OpenSetting_Python(object sender, RoutedEventArgs e)
         {
-            // 1. ファイルダイアログを作成
-            var dialog = new OpenFileDialog();
+            var dialog = new OpenFileDialog
+            {
+                Title = "Select Python DLL (python3xx.dll)",
+                Filter = "Python DLL|python3*.dll|All Files|*.*",
+                FileName = "python310.dll"
+            };
 
-            // フィルター設定（例: テキストファイルか全てのファイル）
-            dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-
-            // 2. ダイアログを表示し、OKが押されたか確認
             if (dialog.ShowDialog() == true)
             {
-                // 選択されたファイルのフルパスを取得
-                string selectedPath = dialog.FileName;
-                data_file_path = selectedPath;
-                // 画面に表示したい場合（例: TextBoxなどがあれば）デバック用
-                DebagBox.Text = data_file_path;
+                // エンジンに保存させる
+                _engine.SavePythonPath(dialog.FileName);
 
+                try
+                {
+                    // 初期化再試行
+                    if (_engine.TryInitializePython(silent: false))
+                    {
+                        MessageBox.Show($"設定保存＆Python起動成功！\nPath: {dialog.FileName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"起動失敗: {ex.Message}\n再起動してください。");
+                }
+            }
+        }
+
+        // ---------------------------------------------------------
+        // ファイルを開く
+        // ---------------------------------------------------------
+        private void Open_file(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "ASCII/CSV Files (*.asc;*.csv;*.txt)|*.asc;*.csv;*.txt|All Files (*.*)|*.*",
+                Title = "データファイルを開く"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // エンジンに読み込ませる
+                    _engine.LoadData(dialog.FileName);
+
+                    if (_engine.Tags.Count == 0)
+                    {
+                        MessageBox.Show("データが見つかりませんでした。");
+                        return;
+                    }
+
+                    // 画面更新
+                    UpdateGraph();
+                    UpdateTable();
+
+                    MessageBox.Show("読み込み完了！");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"読み込みエラー:\n{ex.Message}\nPython設定を確認してください。");
+                }
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 帯電補正 (Shift)
+        // ---------------------------------------------------------
+        private void ApplyShift_Click(object sender, RoutedEventArgs e)
+        {
+            if (_engine.Tags.Count == 0)
+            {
+                MessageBox.Show("データがありません。");
+                return;
             }
 
+            try
+            {
+                // エンジンを使って設定読み込み -> 補正実行
+                var settings = _engine.LoadShiftSettings();
+                _engine.ApplyShift(settings);
+
+                UpdateGraph();
+
+                MessageBox.Show($"補正完了 (Ref: {settings.ShiftPeakCenter} eV)");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"補正エラー:\n{ex.Message}");
+            }
         }
 
-        private void OpenSettings_shift(object sender, RoutedEventArgs e)
+        // ---------------------------------------------------------
+        // UI更新メソッド (データは _engine からもらう)
+        // ---------------------------------------------------------
+        private void UpdateGraph()
         {
-            // 1. 設定ウィンドウのインスタンス（実体）を作る
-            var Window1 = new Window1();
+            graph_1.Plot.Clear();
 
-            // 2. ウィンドウを表示する
-            // Show() ではなく ShowDialog() を使うと、
-            // 設定画面を閉じるまでメイン画面が操作できなくなります（設定画面向き）
-            Window1.ShowDialog();
+            for (int i = 0; i < _engine.Tags.Count; i++)
+            {
+                var scatter = graph_1.Plot.Add.Scatter(_engine.XData[i], _engine.YData[i]);
+                scatter.LegendText = _engine.Tags[i];
+                scatter.MarkerSize = 2;
+                scatter.LineWidth = 1;
+            }
+
+            if (_engine.XData.Count > 0)
+            {
+                double xMax = _engine.XData.SelectMany(x => x).Max();
+                double xMin = _engine.XData.SelectMany(x => x).Min();
+                graph_1.Plot.Axes.SetLimitsX(xMax, xMin);
+            }
+
+            graph_1.Plot.ShowLegend();
+            graph_1.Plot.Axes.AutoScale();
+            graph_1.Refresh();
         }
 
-        private void OpenSetting_RSF(object sender, RoutedEventArgs e)
+        private void UpdateTable()
         {
-            var RSF=new RSF();
-
-            RSF.ShowDialog();
+            var tableData = new List<SpectrumInfo>();
+            for (int i = 0; i < _engine.Tags.Count; i++)
+            {
+                tableData.Add(new SpectrumInfo
+                {
+                    Id = i + 1,
+                    TagName = _engine.Tags[i],
+                    Points = _engine.XData[i].Length
+                });
+            }
+            SideDataGrid.ItemsSource = tableData;
         }
 
-        private void OpenSetting_peakfit(object sender, RoutedEventArgs e)
+        private void graph_Default_setting()
         {
-            var PeakFitEditor = new PeakFitEditor();
-
-            PeakFitEditor.ShowDialog();
+            graph_1.Plot.Axes.Bottom.Label.Text = "Binding Energy [eV]";
+            graph_1.Plot.Axes.Bottom.Label.FontSize = 24;
+            graph_1.Plot.Axes.Left.Label.Text = "Intensity [-]";
+            graph_1.Plot.Axes.Left.Label.FontSize = 24;
+            graph_1.Plot.Axes.Bottom.TickLabelStyle.FontSize = 18;
+            graph_1.Plot.Axes.Left.TickLabelStyle.FontSize = 18;
         }
 
+        // 設定画面を開くだけの処理
+        private void OpenSettings_shift(object sender, RoutedEventArgs e) => new Window1().ShowDialog();
+        private void OpenSetting_RSF(object sender, RoutedEventArgs e) => new RSF().ShowDialog();
+        private void OpenSetting_peakfit(object sender, RoutedEventArgs e) => new PeakFitEditor().ShowDialog();
+    }
+
+    public class SpectrumInfo
+    {
+        public int Id { get; set; }
+        public string TagName { get; set; } = "";
+        public int Points { get; set; }
     }
 }
-        
-    

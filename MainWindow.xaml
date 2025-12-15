@@ -10,7 +10,7 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="FIle">
-                <MenuItem Header="Open" Click = "Open_file"/> 　
+                <MenuItem Header="Open" Click = "Open_file"/>
                 <Separator/>
                 <MenuItem Header="Export"/>
             </MenuItem>
@@ -18,10 +18,33 @@
                 <MenuItem Header="Shift Config" Click="OpenSettings_shift" />
                 <MenuItem Header="Add RSF data" Click="OpenSetting_RSF"/>
                 <MenuItem Header="Peak Fit Config" Click="OpenSetting_peakfit"/>
+                <Separator/>
+                <MenuItem Header="Python_Path_config" Click="OpenSetting_Python" />
             </MenuItem>
-            <TextBox x:Name="DebagBox"/>
+            <TextBox x:Name="DebagBox" Width="100"/>
         </Menu>
 
+        <DockPanel DockPanel.Dock="Left" Width="250">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Button Content="Button 1" Height="39" Width="120" Margin="0,0,0,20" />
+                    <Button Content="Button 2" Height="39" Width="120" Margin="0,0,0,20" />
+                    <Button Content="Button 3" Height="39" Width="120" />
+                </StackPanel>
+
+                <DataGrid x:Name="SideDataGrid" Grid.Row="1" 
+                          AutoGenerateColumns="True" 
+                          CanUserAddRows="True"
+                          Margin="5">
+                </DataGrid>
+
+            </Grid>
+        </DockPanel>
 
         <Grid>
             <ScottPlot:WpfPlot x:Name="graph_1"/>
