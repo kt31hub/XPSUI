@@ -21,6 +21,10 @@
                 <Separator/>
                 <MenuItem Header="Python_Path_config" Click="OpenSetting_Python" />
             </MenuItem>
+            <MenuItem Header="Tools">
+                <MenuItem Header="Apply Charge Shift" Click="ApplyShift_Click"/>
+                <MenuItem Header="Analyze All (Table)" Click="AnalyzeAll_Click"/>
+            </MenuItem>
             <TextBox x:Name="DebagBox" Width="100"/>
         </Menu>
 
@@ -37,11 +41,12 @@
                     <Button Content="Button 3" Height="39" Width="120" />
                 </StackPanel>
 
-                <DataGrid x:Name="SideDataGrid" Grid.Row="1" 
-                          AutoGenerateColumns="True" 
-                          CanUserAddRows="True"
-                          Margin="5">
-                </DataGrid>
+                <DataGrid x:Name="SideDataGrid" 
+          Grid.Row="1" 
+          AutoGenerateColumns="True" 
+          CanUserAddRows="False"
+          IsReadOnly="True"
+          Margin="5"/>
 
             </Grid>
         </DockPanel>
