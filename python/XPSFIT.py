@@ -87,10 +87,9 @@ def perform_fitting(x, y, peak_infos, verbose=True):
             bounds=(bounds_min, bounds_max),
             maxfev=10000
         )
-    except RuntimeError:
+    except Exception as e: # ← すべてのエラーをキャッチするように変更
         if verbose:
-            print("Fitting failed to converge.")
-        return None, None
+            print(f"Fitting failed: {e}")
 
     # 結果整理
     fitted_peaks = []
