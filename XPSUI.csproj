@@ -14,6 +14,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="python\XPSASC.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="python\XPSCAL.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
