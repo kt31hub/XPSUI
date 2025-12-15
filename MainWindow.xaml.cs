@@ -26,13 +26,10 @@ namespace XPSUI
             graph_1.Refresh();
             
         }
+        //グローバル関数の定義
+        public string data_file_path=" ";
 
-        public class AppSettings
-        {
-            // 保存したいパス
-            public string LastFilePath { get; set; }
-        }
-
+        //デフォルトプロット
         private void graph_Default_setting()
         {
             var x_label = graph_1.Plot.Axes.Bottom.Label;
@@ -58,6 +55,8 @@ namespace XPSUI
             graph_1.Plot.Add.Scatter(dataX, dataY);
         }
 
+        
+        //ファイルパス獲得
         private void Open_file(object sender, RoutedEventArgs e)
         {
             // 1. ファイルダイアログを作成
@@ -71,14 +70,25 @@ namespace XPSUI
             {
                 // 選択されたファイルのフルパスを取得
                 string selectedPath = dialog.FileName;
-
-                // 画面に表示したい場合（例: TextBoxなどがあれば）
-                DebagBox.Text = selectedPath;
+                data_file_path = selectedPath;
+                // 画面に表示したい場合（例: TextBoxなどがあれば）デバック用
+                DebagBox.Text = data_file_path;
 
             }
+
         }
 
-        
+        private void OpenSettings_shift(object sender, RoutedEventArgs e)
+        {
+            // 1. 設定ウィンドウのインスタンス（実体）を作る
+            var Window1 = new Window1();
+
+            // 2. ウィンドウを表示する
+            // Show() ではなく ShowDialog() を使うと、
+            // 設定画面を閉じるまでメイン画面が操作できなくなります（設定画面向き）
+            Window1.ShowDialog();
+        }
+
 
     }
 }

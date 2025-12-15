@@ -15,7 +15,7 @@
                 <MenuItem Header="Export"/>
             </MenuItem>
             <MenuItem Header="Setting">
-                <MenuItem Header="Shift Config"/>
+                <MenuItem Header="Shift Config" Click="OpenSettings_shift" />
                 <MenuItem Header="Add RSF data"/>
                 <MenuItem Header="Peak Fit Config"/>
             </MenuItem>
