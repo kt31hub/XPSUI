@@ -1,0 +1,17 @@
+[
+    {"x_axe_label_font":"Times New Roman"},
+    {"x_axe_label_size":24},
+    {"x_axe_label":"Binding Energy [eV]"},
+    {"y_axe_label_font":"Times New Roman"},
+    {"y_axe_label_size":24},
+    {"y_axe_label":"Intensity [-]"},
+    {"x_axe_font":"Times New Roman"},
+    {"x_axe_size":24},
+    {"x_axe_max":1000},
+    {"x_axe_min":0},
+    {"y_axe_font":"Times New Roman"},
+    {"y_axe_size":24},
+    {"y_axe_max":10000},
+    {"y_axe_min":0},
+    {"line_color":"#000000"}
+]
