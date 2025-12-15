@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using static XPSUI.XpsEngine;
 
 namespace XPSUI
 {
@@ -176,7 +177,34 @@ namespace XPSUI
         private void OpenSettings_shift(object sender, RoutedEventArgs e) => new Window1().ShowDialog();
         private void OpenSetting_RSF(object sender, RoutedEventArgs e) => new RSF().ShowDialog();
         private void OpenSetting_peakfit(object sender, RoutedEventArgs e) => new PeakFitEditor().ShowDialog();
+        private void AnalyzeAll_Click(object sender, RoutedEventArgs e)
+        {
+            if (_engine.Tags.Count == 0)
+            {
+                MessageBox.Show("データがありません。");
+                return;
+            }
+
+            try
+            {
+                // 1. エンジンで全解析を実行
+                List<AnalysisResultRow> results = _engine.RunAnalysis();
+
+                // 2. 左下のDataGridに表示
+                SideDataGrid.ItemsSource = results;
+
+                // 3. DataGridのカラム自動生成をONにしておく必要があります
+                // (XAMLで AutoGenerateColumns="True" になっているか確認)
+
+                MessageBox.Show("解析が完了しました。\n左下の表を確認してください。");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"解析エラー:\n{ex.Message}");
+            }
+        }
     }
+
 
     public class SpectrumInfo
     {
