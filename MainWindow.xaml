@@ -10,7 +10,7 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="FIle">
-                <MenuItem Header="Open"/> 　
+                <MenuItem Header="Open" Click = "Open_file"/> 　
                 <Separator/>
                 <MenuItem Header="Export"/>
             </MenuItem>
@@ -19,6 +19,7 @@
                 <MenuItem Header="Add RSF data"/>
                 <MenuItem Header="Peak Fit Config"/>
             </MenuItem>
+            <TextBox x:Name="DebagBox"/>
         </Menu>
 
 

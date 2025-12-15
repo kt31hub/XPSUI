@@ -1,4 +1,7 @@
-﻿using System.Text;
+﻿using Microsoft.Win32;
+using ScottPlot;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -8,7 +11,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using ScottPlot;
 
 namespace XPSUI
 {
@@ -22,8 +24,14 @@ namespace XPSUI
             InitializeComponent();
             graph_Default_setting();
             graph_1.Refresh();
+            
         }
 
+        public class AppSettings
+        {
+            // 保存したいパス
+            public string LastFilePath { get; set; }
+        }
 
         private void graph_Default_setting()
         {
@@ -49,6 +57,29 @@ namespace XPSUI
             double[] dataY = { 1, 4, 9, 16, 25, 16, 9, 4, 1 };
             graph_1.Plot.Add.Scatter(dataX, dataY);
         }
+
+        private void Open_file(object sender, RoutedEventArgs e)
+        {
+            // 1. ファイルダイアログを作成
+            var dialog = new OpenFileDialog();
+
+            // フィルター設定（例: テキストファイルか全てのファイル）
+            dialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+
+            // 2. ダイアログを表示し、OKが押されたか確認
+            if (dialog.ShowDialog() == true)
+            {
+                // 選択されたファイルのフルパスを取得
+                string selectedPath = dialog.FileName;
+
+                // 画面に表示したい場合（例: TextBoxなどがあれば）
+                DebagBox.Text = selectedPath;
+
+            }
+        }
+
+        
+
     }
 }
         
