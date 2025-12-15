@@ -89,6 +89,13 @@ namespace XPSUI
             Window1.ShowDialog();
         }
 
+        private void OpenSetting_RSF(object sender, RoutedEventArgs e)
+        {
+            var RSF=new RSF();
+
+            RSF.ShowDialog();
+        }
+
 
     }
 }
