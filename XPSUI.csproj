@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="pythonnet" Version="3.1.0-preview2024-09-06" />
     <PackageReference Include="ScottPlot.WPF" Version="5.1.57" />
   </ItemGroup>
 
