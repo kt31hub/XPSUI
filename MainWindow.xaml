@@ -23,7 +23,7 @@
             </MenuItem>
             <MenuItem Header="Tools">
                 <MenuItem Header="Apply Charge Shift" Click="ApplyShift_Click"/>
-                <MenuItem Header="Analyze All (Table)" Click="AnalyzeAll_Click"/>
+                <MenuItem Header="Analyze All (Table)" />
             </MenuItem>
             <TextBox x:Name="DebagBox" Width="100"/>
         </Menu>
@@ -36,8 +36,8 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Button Content="Button 1" Height="39" Width="120" Margin="0,0,0,20" />
-                    <Button Content="Button 2" Height="39" Width="120" Margin="0,0,0,20" />
+                    <Button Content="Open File" Height="39" Width="120" Margin="0,0,0,20" Click="Open_file"/>
+                    <Button Content="Shift&#xa;(Charge correction)" Height="39" Width="120" Margin="0,0,0,20" Click="ApplyShift_Click"/>
                     <Button Content="Button 3" Height="39" Width="120" />
                 </StackPanel>
 
