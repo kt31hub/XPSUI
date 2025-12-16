@@ -122,6 +122,35 @@ namespace XPSUI
         }
 
         // ---------------------------------------------------------
+        // 解析
+        // ---------------------------------------------------------
+        private void Apply_Analysis_all(object sender, RoutedEventArgs e)
+        {
+            if (_engine.Tags.Count == 0)
+            {
+                MessageBox.Show("データがありません。");
+                return;
+            }
+            try
+            {
+                var results = _engine.RunAnalysis();
+
+                // 3. UI (下の表) に表示
+                // ※表の名前(x:Name)が "SideDataGrid" なのか "BottomDataGrid" なのか
+                //   XAMLに合わせて変更してください。ここでは仮に BottomDataGrid としています。
+                // BottomDataGrid.ItemsSource = results; 
+
+                // とりあえず最初は件数だけでも出れば成功！
+                MessageBox.Show($"解析完了！\n{results.Count} 行のデータが生成されました。");
+                SideDataGrid.ItemsSource = results;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"解析エラー:\n{ex.Message}");
+            }
+        }
+
+        // ---------------------------------------------------------
         // UI更新メソッド (データは _engine からもらう)
         // ---------------------------------------------------------
         private void UpdateGraph()

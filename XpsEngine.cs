@@ -41,14 +41,14 @@ namespace XPSUI
         {
             var data = new PathConfig { PythonDllPath = path };
             string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(GetConfigPath(PathConfigFileName), json);
+            File.WriteAllText(GetWritableConfigPath(PathConfigFileName), json);
         }
 
         private string LoadPythonPath()
         {
             try
             {
-                string path = GetConfigPath(PathConfigFileName);
+                string path = FindConfigPath(PathConfigFileName);
                 if (File.Exists(path))
                 {
                     string json = File.ReadAllText(path);
@@ -60,29 +60,14 @@ namespace XPSUI
             return null;
         }
 
-        // --- ヘルパー: パス設定と計算関数定義 ---
+        // --- ヘルパー: パス設定 ---
         private void PreparePythonEnvironment()
         {
-            // 1. パス設定 (ここは以前動いていた C#方式 に戻す！)
             dynamic sys = Py.Import("sys");
             string exeDir = AppDomain.CurrentDomain.BaseDirectory;
             string pyDir = Path.Combine(exeDir, "python");
-
             sys.path.append(exeDir);
             sys.path.append(pyDir);
-
-            // 2. 計算用関数だけを定義する (文字列処理の問題が起きないように独立させる)
-            // これで C# 側の array index エラーを回避します
-            string calcCode = @"
-import numpy as np
-def calc_pure_signal(y_raw, y_bg):
-    y_r = np.array(y_raw)
-    y_b = np.array(y_bg)
-    y_pure = y_r - y_b
-    y_pure[y_pure < 0] = 0.0
-    return y_pure
-";
-            PythonEngine.Exec(calcCode);
         }
 
         // --- 2. データ読み込み ---
@@ -90,8 +75,7 @@ def calc_pure_signal(y_raw, y_bg):
         {
             using (Py.GIL())
             {
-                PreparePythonEnvironment(); // ★修正版呼び出し
-
+                PreparePythonEnvironment();
                 dynamic xpsasc = Py.Import("XPSASC");
                 dynamic result = xpsasc.load_allspe(filePath);
 
@@ -116,7 +100,7 @@ def calc_pure_signal(y_raw, y_bg):
         // --- 3. 帯電補正 ---
         public AppSettings LoadShiftSettings()
         {
-            string path = GetConfigPath(ShiftSettingFileName);
+            string path = FindConfigPath(ShiftSettingFileName);
             if (File.Exists(path))
             {
                 try
@@ -134,7 +118,6 @@ def calc_pure_signal(y_raw, y_bg):
             using (Py.GIL())
             {
                 PreparePythonEnvironment();
-
                 dynamic xpscal = Py.Import("XPSCAL");
                 dynamic result = xpscal.shift(
                     Tags, XData, YData,
@@ -164,52 +147,31 @@ def calc_pure_signal(y_raw, y_bg):
 
             using (Py.GIL())
             {
-                // ★読み込みが成功しているなら、パス設定は既に終わっているはずですが
-                // 念のため安全な方法（単純追加）でパスを通します
-                dynamic sys = Py.Import("sys");
-                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                sys.path.append(exeDir);
-                sys.path.append(Path.Combine(exeDir, "python"));
+                PreparePythonEnvironment();
 
                 dynamic xpscal = Py.Import("XPSCAL");
                 dynamic xpsfit = Py.Import("XPSFIT");
                 dynamic json = Py.Import("json");
                 dynamic np = Py.Import("numpy");
 
-                // --- 1. Atomic % 計算 ---
-                string rsfPath = GetConfigPath("RSF.json");
-                List<double> atomicPercents = new List<double>();
+                // ① Atomic % 計算
+                var atomicPercents = CalculateAtomicPercents(xpscal, json);
 
-                if (File.Exists(rsfPath))
-                {
-                    string rsfContent = File.ReadAllText(rsfPath);
-                    dynamic rsfList = json.loads(rsfContent);
-                    dynamic apResult = xpscal.atomic_percent(XData, YData, Tags, rsfList);
-
-                    long count = apResult.__len__();
-                    for (int i = 0; i < count; i++)
-                    {
-                        atomicPercents.Add((double)apResult[i].As<double>());
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < Tags.Count; i++) atomicPercents.Add(0.0);
-                }
-
-                // --- 2. ピークフィッティング ---
-                string peakFitPath = GetConfigPath("peakfit.json");
+                // PeakDBロード
                 dynamic peakDb = null;
+                string peakFitPath = FindConfigPath("peakfit.json");
                 if (File.Exists(peakFitPath))
                 {
                     peakDb = json.loads(File.ReadAllText(peakFitPath));
                 }
 
+                // ② タグごとに処理
                 for (int i = 0; i < Tags.Count; i++)
                 {
                     string tag = Tags[i];
-                    double atVal = atomicPercents[i];
+                    double atVal = (i < atomicPercents.Count) ? atomicPercents[i] : 0.0;
 
+                    // Total行を追加
                     rows.Add(new AnalysisResultRow
                     {
                         Spectrum = tag,
@@ -221,77 +183,146 @@ def calc_pure_signal(y_raw, y_bg):
                         AtomicPer = atVal > 0 ? $"{atVal:F2}" : "-"
                     });
 
-                    if (peakDb != null)
-                    {
-                        dynamic targetConfig = new PyList();
-                        foreach (dynamic p in peakDb)
-                        {
-                            if (p["level"].ToString() == tag) targetConfig.append(p);
-                        }
+                    // スキップ条件 (Python仕様準拠)
+                    if (i == 0) continue;          // Survey (Su1s) はスキップ
+                    if (tag == "CuLMM") continue;  // CuLMM はスキップ
+                    if (peakDb == null) continue;
 
-                        if (targetConfig.__len__() > 0)
-                        {
-                            try
-                            {
-                                // 1. ベースライン計算
-                                dynamic bgRes = xpscal.shirley_baseline(XData[i], YData[i]);
-                                dynamic yBg = bgRes[0];
-
-                                // 2. NumPy計算
-                                dynamic yRaw = np.array(YData[i]);
-                                dynamic yBase = np.array(yBg);
-
-                                // ★ここだけ修正★
-                                // 引き算
-                                dynamic yPure = np.subtract(yRaw, yBase);
-
-                                // エラー原因の `yPure[yPure < 0] = 0` を以下に変更
-                                // これでスライスエラーは確実になくなります
-                                yPure = np.maximum(yPure, 0.0);
-
-                                // 3. Fitting実行
-                                dynamic fitRes = xpsfit.perform_fitting(XData[i], yPure, targetConfig, false);
-
-                                if (fitRes != null && fitRes[0] != null)
-                                {
-                                    dynamic peaks = fitRes[0];
-                                    long pCount = peaks.__len__();
-                                    for (int k = 0; k < pCount; k++)
-                                    {
-                                        dynamic p = peaks[k];
-                                        rows.Add(new AnalysisResultRow
-                                        {
-                                            Spectrum = "",
-                                            Component = p["name"].ToString(),
-                                            Position = $"{p["center"]:F2}",
-                                            FWHM = $"{p["fwhm"]:F2}",
-                                            Area = $"{p["area"]:F0}",
-                                            AreaRatio = $"{p["ratio"]:F1}",
-                                            AtomicPer = ""
-                                        });
-                                    }
-                                }
-                            }
-                            catch (Exception)
-                            {
-                                // 計算エラー時は無視して次へ
-                            }
-                        }
-                    }
+                    // Fitting実行
+                    var fitRows = PerformPeakFitting(i, peakDb, xpscal, xpsfit, np);
+                    rows.AddRange(fitRows);
                 }
             }
             return rows;
         }
 
-        private string GetConfigPath(string fileName)
+        // --- ヘルパー: Atomic % 計算 ---
+        private List<double> CalculateAtomicPercents(dynamic xpscal, dynamic json)
+        {
+            var results = new List<double>();
+            try
+            {
+                string rsfPath = FindConfigPath("RSF.json");
+                dynamic rsfList = new PyList();
+
+                if (File.Exists(rsfPath))
+                {
+                    try
+                    {
+                        string rsfContent = File.ReadAllText(rsfPath);
+                        rsfList = json.loads(rsfContent);
+                    }
+                    catch { }
+                }
+
+                dynamic apResult = xpscal.atomic_percent(XData, YData, Tags, rsfList);
+
+                long count = apResult.__len__();
+                for (int i = 0; i < count; i++)
+                {
+                    try
+                    {
+                        double val = (double)apResult[i].As<double>();
+                        if (double.IsNaN(val) || double.IsInfinity(val)) val = 0.0;
+                        results.Add(val);
+                    }
+                    catch
+                    {
+                        results.Add(0.0);
+                    }
+                }
+            }
+            catch
+            {
+                results.Clear();
+                for (int i = 0; i < Tags.Count; i++) results.Add(0.0);
+            }
+            return results;
+        }
+
+        // --- ヘルパー: Peak Fitting ---
+        private List<AnalysisResultRow> PerformPeakFitting(int index, dynamic peakDb, dynamic xpscal, dynamic xpsfit, dynamic np)
+        {
+            var fitRows = new List<AnalysisResultRow>();
+            try
+            {
+                string tag = Tags[index];
+                dynamic targetConfig = new PyList();
+                foreach (dynamic p in peakDb)
+                {
+                    if (p["level"].ToString() == tag) targetConfig.append(p);
+                }
+
+                if (targetConfig.__len__() > 0)
+                {
+                    // 1. バックグラウンド
+                    dynamic bgRes = xpscal.shirley_baseline(XData[index], YData[index]);
+                    dynamic yBg = bgRes[0];
+
+                    // 2. NumPy計算 & マイナスカット
+                    dynamic yRaw = np.array(YData[index]);
+                    dynamic yBase = np.array(yBg);
+                    dynamic yPure = np.subtract(yRaw, yBase);
+                    yPure = np.maximum(yPure, 0.0);
+
+                    // 3. Fitting
+                    dynamic fitRes = xpsfit.perform_fitting(XData[index], yPure, targetConfig, false);
+
+                    if (fitRes != null && fitRes[0] != null)
+                    {
+                        dynamic peaks = fitRes[0];
+                        long pCount = peaks.__len__();
+                        for (int k = 0; k < pCount; k++)
+                        {
+                            dynamic p = peaks[k];
+                            fitRows.Add(new AnalysisResultRow
+                            {
+                                Spectrum = "",
+                                Component = p["name"].ToString(),
+                                Position = $"{p["center"]:F2}",
+                                FWHM = $"{p["fwhm"]:F2}",
+                                Area = $"{p["area"]:F1}",
+                                AreaRatio = $"{p["ratio"]:F1}",
+                                AtomicPer = ""
+                            });
+                        }
+                    }
+                }
+            }
+            catch { }
+            return fitRows;
+        }
+
+        // --- パス解決ロジック (ここを強化！) ---
+        private string FindConfigPath(string fileName)
+        {
+            // 1. システム標準のドキュメントフォルダ (OneDriveの場合あり)
+            string myDoc = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string path1 = Path.Combine(myDoc, "XPSUI_setting", fileName);
+            if (File.Exists(path1)) return path1;
+
+            // 2. ユーザープロファイル直下の Documents (ローカル強制)
+            // C:\Users\kaito\Documents\XPSUI_setting\...
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string path2 = Path.Combine(userProfile, "Documents", "XPSUI_setting", fileName);
+            if (File.Exists(path2)) return path2;
+
+            // 3. EXEと同じフォルダ
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            string path3 = Path.Combine(exeDir, fileName);
+            if (File.Exists(path3)) return path3;
+
+            // 見つからなかった場合は標準パスを返す
+            return path1;
+        }
+
+        private string GetWritableConfigPath(string fileName)
         {
             string myDoc = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             string folder = Path.Combine(myDoc, "XPSUI_setting");
             if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
             return Path.Combine(folder, fileName);
         }
-
-
 
         private class PathConfig { public string PythonDllPath { get; set; } = ""; }
         public class AnalysisResultRow

@@ -38,7 +38,7 @@
                 <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
                     <Button Content="Open File" Height="39" Width="120" Margin="0,0,0,20" Click="Open_file"/>
                     <Button Content="Shift&#xa;(Charge correction)" Height="39" Width="120" Margin="0,0,0,20" Click="ApplyShift_Click"/>
-                    <Button Content="Button 3" Height="39" Width="120" />
+                    <Button Content="Button 3" Height="39" Width="120" Click="Apply_Analysis_all" />
                 </StackPanel>
 
                 <DataGrid x:Name="SideDataGrid" 
