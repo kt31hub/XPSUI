@@ -177,7 +177,7 @@ namespace XPSUI
         private void OpenSettings_shift(object sender, RoutedEventArgs e) => new Window1().ShowDialog();
         private void OpenSetting_RSF(object sender, RoutedEventArgs e) => new RSF().ShowDialog();
         private void OpenSetting_peakfit(object sender, RoutedEventArgs e) => new PeakFitEditor().ShowDialog();
-        
+
     }
 
 

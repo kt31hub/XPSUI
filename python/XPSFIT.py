@@ -38,110 +38,118 @@ def multi_peak_model(x, *params):
     return y_sum
 
 # --- 3. メインのフィッティング実行関数 ---
-def perform_fitting(x, y, peak_infos, verbose=True):
+def perform_fitting(x, y, config, verbose=False):
     """
-    x: エネルギー軸 (eV)
-    y: バックグラウンドを引いた後の強度データ
-    peak_infos: jsonから読み込んだピーク情報のリスト
-    verbose: Trueなら結果をコンソールに表示する
+    指定された範囲のデータ(x, y)に対し、configの設定に基づいてピーク分離を行う
+    エラーが起きても停止せず、Noneを返して処理を継続させる
     """
-    x = np.array(x)
-    y = np.array(y)
-    
-    initial_guesses = []
-    bounds_min = []
-    bounds_max = []
-    
-    # JSON情報から初期値と制約条件を作成
-    for p in peak_infos:
-        # --- Amplitude (高さ) ---
-        nearest_idx = np.abs(x - p["center"]).argmin()
-        init_amp = y[nearest_idx] if y[nearest_idx] > 0 else np.max(y) * 0.5
-        
-        initial_guesses.append(init_amp)
-        bounds_min.append(0)
-        bounds_max.append(np.inf)
-        
-        # --- Center (位置) ---
-        initial_guesses.append(p["center"])
-        bounds_min.append(p["center"] - p["center_error"])
-        bounds_max.append(p["center"] + p["center_error"])
-        
-        # --- FWHM (半値幅) ---
-        initial_guesses.append(p["FWHM"])
-        bounds_min.append(p["FWHM"] - p["FWHM_error"])
-        bounds_max.append(p["FWHM"] + p["FWHM_error"])
-        
-        # --- Mix Ratio (GL混合比 0~1) ---
-        initial_guesses.append(0.3)
-        bounds_min.append(0.0)
-        bounds_max.append(1.0)
+    # 1. 初期パラメータ作成
+    try:
+        initial_guess = []
+        bounds_min = []
+        bounds_max = []
+        peak_infos = []
 
-    # curve_fit 実行
+        # xの範囲など事前チェック
+        if len(x) < 5 or len(y) < 5:
+            return None, None
+
+        for peak_conf in config:
+            # パラメータ読み込み (name, position, fwhm, etc...)
+            # ※ configの構造に合わせてキー名は適宜調整してください
+            p_name = peak_conf["name"]
+            
+            # 位置 (center)
+            p_pos = float(peak_conf["position"])
+            p_pos_min = p_pos - 0.5 # ±0.5eV程度動けるとする
+            p_pos_max = p_pos + 0.5
+            
+            # FWHM (半値幅)
+            p_fwhm = float(peak_conf["fwhm"])
+            p_fwhm_min = p_fwhm * 0.5
+            p_fwhm_max = p_fwhm * 1.5
+            
+            # 強度 (Amplitude) - 初期値は適当、範囲は0〜無限大
+            # 簡易的にyの最大値を参考にしても良い
+            p_amp = np.max(y) * 0.5
+            p_amp_min = 0.0
+            p_amp_max = np.inf
+
+            # 混合比 (Gaussian/Lorentzian mix)
+            # 0=Gauss, 1=Lorentz
+            p_mix = 0.3
+            p_mix_min = 0.0
+            p_mix_max = 1.0
+
+            # パラメータ追加順序: Amp, Center, FWHM, Mix
+            initial_guess.extend([p_amp, p_pos, p_fwhm, p_mix])
+            
+            bounds_min.extend([p_amp_min, p_pos_min, p_fwhm_min, p_mix_min])
+            bounds_max.extend([p_amp_max, p_pos_max, p_fwhm_max, p_mix_max])
+            
+            peak_infos.append(peak_conf)
+
+        # 境界条件リスト作成
+        bounds_list = (bounds_min, bounds_max)
+
+    except Exception as e:
+        if verbose: print(f"Config Error: {e}")
+        return None, None
+
+    # 2. フィッティング実行 (ここが一番落ちやすいのでガードする)
     try:
         popt, pcov = curve_fit(
             multi_peak_model, 
             x, 
             y, 
-            p0=initial_guesses, 
-            bounds=(bounds_min, bounds_max),
-            maxfev=10000
+            p0=initial_guess, 
+            bounds=bounds_list, 
+            maxfev=10000 # 試行回数を少し増やす
         )
-    except Exception as e: # ← すべてのエラーをキャッチするように変更
-        if verbose:
-            print(f"Fitting failed: {e}")
+    except Exception as e:
+        # RuntimeError (収束せず) や OptimizeWarning (共分散なし) など
+        if verbose: print(f"Fitting Failed: {e}")
+        return None, None
 
-    # 結果整理
-    fitted_peaks = []
-    num_peaks = len(peak_infos)
-    
-    # まず各成分を計算
-    temp_peaks = []
-    total_area = 0.0
-    
-    for i in range(num_peaks):
-        amp, cen, fwhm, mix = popt[i*4 : (i+1)*4]
+    # 3. 結果整理 (Excel出力用に構造を変えない)
+    try:
+        fitted_peaks = []
+        num_peaks = len(peak_infos)
         
-        # このピーク単体の波形
-        y_comp = pseudo_voigt(x, amp, cen, fwhm, mix)
+        # 全体のフィットカーブを計算
+        y_sum_fit = multi_peak_model(x, *popt)
         
-        # ★★★ 修正箇所: np.abs() を追加して絶対値にする ★★★
-        area = np.abs(np.trapz(y_comp, x)) 
-        
-        total_area += area
-        
-        temp_peaks.append({
-            "name": peak_infos[i]["name"],
-            "amplitude": amp,
-            "center": cen,
-            "fwhm": fwhm,
-            "mix_ratio": mix,
-            "y_data": y_comp,
-            "area": area
-        })
-
-    # 面積比を計算して格納
-    if verbose:
-        print("-" * 65)
-        print(f"{'Name':<10} | {'Position':<10} | {'FWHM':<6} | {'Area':<10} | {'Ratio (%)':<10}")
-        print("-" * 65)
-
-    for p in temp_peaks:
+        for i in range(num_peaks):
+            amp, cen, fwhm, mix = popt[i*4 : (i+1)*4]
+            
+            # このピーク単体の波形
+            y_comp = pseudo_voigt(x, amp, cen, fwhm, mix)
+            
+            # 面積計算 (台形積分)
+            area = np.trapz(y_comp, x) 
+            if area < 0: area = 0 # 念のため
+            
+            fitted_peaks.append({
+                "name": peak_infos[i]["name"],
+                "amplitude": amp,
+                "center": cen,
+                "fwhm": fwhm,
+                "mix_ratio": mix,
+                "y_data": y_comp, # 個別波形データ
+                "area": area,
+                # Excel出力に必要な 'ratio' は後で全体の合計面積から計算して入れるのが一般的ですが、
+                # ここでは暫定的に入れておき、呼び出し元で再計算しても良いです
+                "ratio": 0.0 
+            })
+            
+        # 面積比 (Ratio) の再計算
+        total_area = sum(p["area"] for p in fitted_peaks)
         if total_area > 0:
-            ratio = (p['area'] / total_area) * 100
-        else:
-            ratio = 0.0
-        
-        p['ratio'] = ratio # 辞書に追加
-        fitted_peaks.append(p)
-        
-        if verbose:
-            print(f"{p['name']:<10} | {p['center']:<7.2f} eV | {p['fwhm']:<6.2f} | {p['area']:<10.1f} | {ratio:>6.1f} %")
-    
-    if verbose:
-        print("-" * 65)
+            for p in fitted_peaks:
+                p["ratio"] = (p["area"] / total_area) * 100.0
 
-    # 合計波形
-    y_fit_total = multi_peak_model(x, *popt)
-    
-    return fitted_peaks, y_fit_total
+        return fitted_peaks, y_sum_fit
+
+    except Exception as e:
+        if verbose: print(f"Result Processing Error: {e}")
+        return None, None
